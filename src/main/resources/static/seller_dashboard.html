@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Seller Dashboard</title>
+  <style>
+    :root {
+      --primary: #2dc6c1;
+      --secondary: #5f5e64;
+      --dark: #4a5066;
+    }
+
+    body {
+      font-family: 'Arial', sans-serif;
+      background: #f5f6fa;
+      margin: 0;
+      padding: 2rem;
+    }
+
+    .container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      position: relative;
+    }
+
+    .logout-btn {
+      position: absolute;
+      top: -1.5rem;
+      right: 0;
+      background: var(--dark);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .card {
+      background: white;
+      border-radius: 15px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    h1 {
+      color: var(--dark);
+      grid-column: 1 / -1;
+    }
+
+    .dish-list {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .dish-item {
+      padding: 1rem;
+      border: 1px solid #eee;
+      border-radius: 8px;
+    }
+
+    .add-dish-form, .edit-dish-form {
+      display: grid;
+      gap: 1rem;
+    }
+
+    input, button {
+      padding: 0.5rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    /* Modal */
+    #editModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: white;
+      padding: 2rem;
+      border-radius: 10px;
+      width: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <button class="logout-btn" onclick="logout()">Logout</button>
+    <h1>Seller Dashboard</h1>
+
+    <!-- Add Dish Form -->
+    <div class="card">
+      <h2>Add New Dish</h2>
+      <form id="addDishForm" class="add-dish-form">
+        <input type="text" name="name" placeholder="Dish Name" required />
+        <input type="number" name="price" placeholder="Price" step="1.00" required />
+        <input type="text" name="description" placeholder="Description" />
+        <input type="number" name="quantity" placeholder="Quantity" required />
+        <button type="submit">Add Dish</button>
+      </form>
+    </div>
+
+    <!-- Dishes List -->
+    <div class="card">
+      <h2>Your Dishes</h2>
+      <div id="dishesList" class="dish-list"></div>
+    </div>
+  </div>
+
+  <!-- Edit Dish Modal -->
+  <div id="editModal">
+    <div class="modal-content">
+      <h3>Edit Dish</h3>
+      <form id="editDishForm" class="edit-dish-form">
+        <input type="text" id="editName" placeholder="Dish Name" required />
+        <input type="number" id="editPrice" placeholder="Price" step="1.00" required />
+        <input type="text" id="editDescription" placeholder="Description" />
+        <input type="number" id="editQuantity" placeholder="Quantity" required />
+        <button type="submit">Update</button>
+        <button type="button" onclick="closeEditModal()" style="background:#ccc; color:black;">Cancel</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const sellerId = parseInt(localStorage.getItem('sellerId'), 10);
+
+    // Fetch and display dishes
+    async function fetchAndDisplayDishes() {
+      try {
+        const response = await fetch(`http://localhost:8082/api/dishes/seller/${sellerId}`);
+        const dishes = await response.json();
+        renderDishes(dishes);
+      } catch (error) {
+        alert(error.message);
+      }
+    }
+
+    // Render dishes
+    function renderDishes(dishes) {
+      const container = document.getElementById('dishesList');
+      container.innerHTML = dishes.map(dish => `
+        <div class="dish-item">
+          <h3>${dish.name}</h3>
+          <p>Price: $${dish.price.toFixed(2)}</p>
+          <p>${dish.description || 'No description'}</p>
+          <p>Quantity: ${dish.quantity}</p>
+          <button onclick='openEditModal(${JSON.stringify(dish)})'>Edit</button>
+        </div>
+      `).join('');
+    }
+
+    // Add Dish
+    document.getElementById('addDishForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+      const dish = {
+        name: formData.get('name'),
+        price: parseFloat(formData.get('price')),
+        description: formData.get('description'),
+        quantity: parseInt(formData.get('quantity')),
+        sellerId: sellerId
+      };
+
+      try {
+        const response = await fetch('http://localhost:8082/api/dishes/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(dish)
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          alert('Dish added successfully!');
+          fetchAndDisplayDishes();
+          e.target.reset();
+        } else {
+          alert(data.message || 'Failed to add dish');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert('An error occurred while adding dish');
+      }
+    });
+
+    // Edit Dish Logic
+    let currentEditingDishName = null;
+
+    function openEditModal(dish) {
+      currentEditingDishName = dish.name;
+      document.getElementById('editName').value = dish.name;
+      document.getElementById('editPrice').value = dish.price;
+      document.getElementById('editDescription').value = dish.description;
+      document.getElementById('editQuantity').value = dish.quantity;
+      document.getElementById('editModal').style.display = 'flex';
+    }
+
+    function closeEditModal() {
+      document.getElementById('editModal').style.display = 'none';
+      currentEditingDishName = null;
+    }
+
+    document.getElementById('editDishForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const updatedDish = {
+        name: document.getElementById('editName').value,
+        price: parseFloat(document.getElementById('editPrice').value),
+        description: document.getElementById('editDescription').value,
+        quantity: parseInt(document.getElementById('editQuantity').value),
+        sellerId: sellerId
+      };
+
+      try {
+        const response = await fetch(`http://localhost:8082/api/dishes/${encodeURIComponent(currentEditingDishName)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatedDish)
+        });
+
+        if (response.ok) {
+          alert('Dish updated successfully!');
+          fetchAndDisplayDishes();
+          closeEditModal();
+        } else {
+          const data = await response.json();
+          alert(data.message || 'Failed to update dish');
+        }
+      } catch (error) {
+        console.error('Update Error:', error);
+        alert('An error occurred while updating dish');
+      }
+    });
+
+    // Logout function
+    function logout() {
+      localStorage.removeItem('sellerId');
+      window.location.href = 'login.html'; 
+    }
+
+    // Load on start
+    fetchAndDisplayDishes();
+  </script>
+</body>
+</html>
