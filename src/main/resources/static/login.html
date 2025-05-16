@@ -55,6 +55,7 @@
                         localStorage.setItem('sellerId', data.id);
                         window.location.href = '/seller_dashboard.html';
                     } else {
+                        localStorage.setItem('customerId', data.id);
                         window.location.href = '/dashboard.html';
                     }
 

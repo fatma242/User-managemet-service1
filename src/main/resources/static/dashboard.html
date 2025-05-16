@@ -1,26 +1,181 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Welcome</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Customer Dashboard</title>
   <style>
+    :root {
+      --primary: #2dc6c1;
+      --secondary: #5f5e64;
+      --dark: #4a5066;
+    }
+
     body {
-      font-family: Arial, sans-serif;
-      background-color: #f0f8ff;
-      text-align: center;
-      margin-top: 100px;
+      font-family: 'Arial', sans-serif;
+      background: #f5f6fa;
+      margin: 0;
+      padding: 2rem;
     }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      gap: 2rem;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      position: relative;
+    }
+
+    .logout-btn {
+      position: absolute;
+      top: -1.5rem;
+      right: 0;
+      background: var(--dark);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .card {
+      background: white;
+      border-radius: 15px;
+      padding: 1.5rem;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
     h1 {
-      color: #2c3e50;
+      color: var(--dark);
+      grid-column: 1 / -1;
     }
-    p {
-      color: #34495e;
-      font-size: 18px;
+
+    .order-item {
+      padding: 1rem;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+
+    form {
+      display: grid;
+      gap: 1rem;
+    }
+
+    input, select, button {
+      padding: 0.5rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <h1>Welcome to Our Website!</h1>
-  <p>We're glad to have you here. Explore and enjoy your stay!</p>
+  <div class="container">
+    <button class="logout-btn" onclick="logout()">Logout</button>
+    <h1>Customer Dashboard</h1>
+
+    <!-- Place New Order -->
+    <div class="card">
+      <h2>Make a New Order</h2>
+      <form id="orderForm">
+        <select id="dishSelect" required>
+          <option value="">Select Dish</option>
+        </select>
+        <input type="number" id="quantity" placeholder="Quantity" min="1" required />
+        <button type="submit">Place Order</button>
+      </form>
+    </div>
+
+    <!-- View Orders -->
+    <div class="card">
+      <h2>Your Orders</h2>
+      <div id="ordersList"></div>
+    </div>
+  </div>
+
+  <script>
+    const customerId = parseInt(localStorage.getItem('customerId'), 10);
+
+    if (!customerId) {
+      alert("Please login first.");
+      window.location.href = "login.html";
+    }
+
+    // Fetch available dishes
+    async function fetchDishes() {
+      const res = await fetch("http://localhost:8082/api/dishes/all");
+      const dishes = await res.json();
+      const select = document.getElementById("dishSelect");
+      select.innerHTML = '<option value="">Select Dish</option>';
+      dishes.forEach(d => {
+        const opt = document.createElement("option");
+        opt.value = d.id;
+        opt.textContent = `${d.name} - $${d.price}`;
+        select.appendChild(opt);
+      });
+    }
+
+    // Fetch customer's orders
+    async function fetchOrders() {
+      const res = await fetch(`http://localhost:8083/OrderService/api/orders/${customerId}`);
+      const orders = await res.json();
+      const container = document.getElementById("ordersList");
+      container.innerHTML = orders.map(order => `
+        <div class="order-item">
+          <strong>Order ID:</strong> ${order.id}<br/>
+          <strong>Total:</strong> $${order.totalAmount.toFixed(2)}<br/>
+          <strong>Status:</strong> ${order.status || "Pending"}
+        </div>
+      `).join("");
+    }
+
+    // Submit order
+    document.getElementById("orderForm").addEventListener("submit", async e => {
+      e.preventDefault();
+      const dishId = parseInt(document.getElementById("dishSelect").value);
+      const quantity = parseInt(document.getElementById("quantity").value);
+
+      const orderRequest = {
+        customerId,
+        items: [{ dishId, quantity }]
+      };
+
+      try {
+        const res = await fetch("http://localhost:8083/OrderService/api/orders/place", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(orderRequest)
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          alert("Order placed successfully! Confirmation ID: " + data.orderId);
+          fetchOrders();
+          document.getElementById("orderForm").reset();
+        } else {
+          alert(data.error || "Order could not be placed.");
+        }
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    });
+
+    // Logout
+    function logout() {
+      localStorage.removeItem('customerId');
+      window.location.href = 'login.html';
+    }
+
+    fetchDishes();
+    fetchOrders();
+  </script>
 </body>
 </html>
